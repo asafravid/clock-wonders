@@ -1,13 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.animation as animation
-from datetime import datetime, timedelta
-import time
+from datetime import datetime, timedelta, time as time_measure
 
 # Global variable to keep track of the pause state
-paused = False
 pause_start_time = None
 pause_interval = 15  # Default pause interval
+jump_interval = 13000 # frames
+jump_after_find = 0 
 
 # Function to calculate the mean square error based on the relative difference between angles
 def calculate_mse(hour_angle, min_angle, sec_angle):
@@ -18,15 +18,19 @@ def calculate_mse(hour_angle, min_angle, sec_angle):
     mse = np.max([diff_hour_min**2, diff_hour_sec**2, diff_min_sec**2])
     return mse
 
+# Function to close the plot when the animation is complete
+def close_plot(event):
+    plt.close(event.canvas.figure)
+
 # Function to update the hands and MSE
-def update_usec(frame, start_time, fast_forward):
-    global paused, pause_start_time
+def update_usec(frame, start_time, fast_forward, mseAccuracy):
+    global pause_start_time, jump_after_find, jump_interval
 
     # Clear the current plot
     plt.clf()
 
     # Calculate the current time with fast forward factor
-    elapsed_time = timedelta(seconds=frame * fast_forward * 0.1)
+    elapsed_time = timedelta(seconds=frame * fast_forward * 0.1) if pause_start_time is None else timedelta(seconds=(frame+jump_after_find) * fast_forward * 0.1)
     now = start_time + elapsed_time
     second = now.second + now.microsecond / 1e6
     minute = now.minute
@@ -37,34 +41,20 @@ def update_usec(frame, start_time, fast_forward):
     min_angle = np.deg2rad(360 * (minute + second / 60.0) / 60.0)
     hour_angle = np.deg2rad(360 * (hour + (minute + second / 60.0) / 60.0) / 12.0)
 
-    # print(f"Hour: {hour_angle}, Minute: {min_angle}, Second: {sec_angle}")
-
     # Calculate the Mean Square Error based on the relative differences between angles
     mse = calculate_mse(hour_angle, min_angle, sec_angle)
 
     # Check if MSE is less than 0.5
-    if mse < 0.00125 and not paused:
-        paused = True
+    if mse < mseAccuracy:
         pause_start_time = now
-        print(f"Paused at time: {now.strftime('%H:%M:%S')}")
-
-        # Stop the animation
-        ani.event_source.stop()
-
-        # Display the time when paused
-        plt.text(1.6, -0.2, f'Paused at: {pause_start_time.strftime("%H:%M:%S")}', fontsize=12, color='red', va='center')
-
-        # Pause for the specified interval
-        time.sleep(pause_interval)
-
-        # Resume the animation
-        ani.event_source.start()
-        paused = False
+        print(f"Clock Hands Overlap at time: {now.strftime('%H:%M:%S')}")        
+        plt.text(1.6, -0.2, f'Clock Hands Overlap at: {pause_start_time.strftime("%H:%M:%S")}', fontsize=12, color='red', va='center')
+        jump_after_find += jump_interval
 
     # Create the clock hands
-    plt.plot([0, 0.9 * np.sin(hour_angle)], [0, 0.9 * np.cos(hour_angle)], lw=6, color='black')  # Hour hand
-    plt.plot([0, 1.1 * np.sin(min_angle)], [0, 1.1 * np.cos(min_angle)], lw=4, color='blue')    # Minute hand
-    plt.plot([0, 1.2 * np.sin(sec_angle)], [0, 1.2 * np.cos(sec_angle)], lw=2, color='red')     # Second hand
+    plt.plot([0, 0.9 * np.sin(hour_angle)], [0, 0.9 * np.cos(hour_angle)], lw=6, color='black')
+    plt.plot([0, 1.1 * np.sin(min_angle)], [0, 1.1 * np.cos(min_angle)], lw=4, color='blue')
+    plt.plot([0, 1.2 * np.sin(sec_angle)], [0, 1.2 * np.cos(sec_angle)], lw=2, color='red')
 
     # Draw the clock face
     clock_face = plt.Circle((0, 0), 1.3, color='black', fill=False, lw=2)
@@ -89,8 +79,8 @@ def update_usec(frame, start_time, fast_forward):
 
     # Display the MSE and paused time
     plt.text(1.6, 0, f'MSE: {mse:.4f}', fontsize=12, color='black', va='center')
-    if paused:
-        plt.text(0, -1.6, f'Paused at: {pause_start_time.strftime("%H:%M:%S")}', fontsize=12, color='red', ha='center')
+    if pause_start_time is not None:
+        plt.text(0, -1.6, f'Clock Hands Overlap at: {pause_start_time.strftime("%H:%M:%S")}', fontsize=12, color='red', ha='center')
 
     # Set limits and aspect ratio
     plt.xlim(-1.5, 2.5)  # Extend xlim to make space for the text
@@ -100,14 +90,21 @@ def update_usec(frame, start_time, fast_forward):
     # Hide axes
     plt.axis('off')
 
-# Initial parameters
-fast_forward = 3.0  # Change this to any factor you want to fast forward time
-pause_interval = 5  # Change this to set the pause duration in seconds
-start_time = datetime.now()
+def run_clock():
+    fast_forward = 3.0  # Change this to any factor you want to fast forward time
+    mseAccuracy = 0.00250
 
-# Create the animation
-fig = plt.figure(figsize=(8, 6))  # Adjusted figsize to make space for the text
-ani = animation.FuncAnimation(fig, update_usec, frames=10000000, interval=100, fargs=(start_time, fast_forward))
-# ani.save('clock_sim_ffw_fine_hands_angles_mse_pause.gif', writer='imagemagick', fps=60)
+    # Initialize a specific time (e.g., 14:30:00)
+    specific_time = time_measure(hour=16, minute=21, second=0)
+    now_with_specific_time = datetime.combine(datetime.today(), specific_time)
+    start_time = now_with_specific_time
 
-plt.show()
+    fig = plt.figure(figsize=(8, 6))
+    ani = animation.FuncAnimation(fig, update_usec, frames=10000000, interval=10, repeat=True, fargs=(start_time, fast_forward, mseAccuracy))
+
+    # Connect the close_plot function to the end of the animation
+    ani._stop = lambda: close_plot(fig)
+
+    plt.show()
+
+run_clock()
