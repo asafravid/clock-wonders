@@ -47,7 +47,9 @@ def update_usec(frame, start_time, fast_forward, mseAccuracy):
     # Check if MSE is less than 0.5
     if mse < mseAccuracy:
         pause_start_time = now
-        print(f"Clock Hands Overlap at time: {now.strftime('%H:%M:%S')}")        
+        round_seconds = timedelta(microseconds=500000)
+        pause_start_time += round_seconds
+        print(f"Clock Hands Overlap at: {pause_start_time.strftime('%H:%M:%S')}")        
         plt.text(1.6, -0.2, f'Clock Hands Overlap at: {pause_start_time.strftime("%H:%M:%S")}', fontsize=12, color='red', va='center')
         jump_after_find += jump_interval
 
@@ -95,7 +97,7 @@ def run_clock():
     mseAccuracy = 0.00250
 
     # Initialize a specific time (e.g., 14:30:00)
-    specific_time = time_measure(hour=16, minute=21, second=0)
+    specific_time = time_measure(hour=0, minute=0, second=0)
     now_with_specific_time = datetime.combine(datetime.today(), specific_time)
     start_time = now_with_specific_time
 
